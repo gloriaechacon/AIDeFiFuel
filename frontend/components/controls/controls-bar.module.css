@@ -1,0 +1,30 @@
+.controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.mode {
+  display: flex;
+  gap: 8px;
+  margin-right: 8px;
+}
+
+.toggleOption {
+  border: 1px solid #e5e7eb;
+  background: #fff;
+  color: #111;
+  padding: 8px 10px;
+  border-radius: 999px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.active {
+  background: #fef3c7;
+  border-color: #f59e0b;
+}
+
+.wallet {
+  margin-left: 8px;
+}

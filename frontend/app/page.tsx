@@ -1,15 +1,17 @@
-import { WalletConnect } from "@/components/wallet-connect"
-import WalletStatus from "@/components/wallet-status"
+"use client";
 
-export default function Home() {
+import styles from "./page.module.css";
+import { Header } from "../components/header/header";
+import { FlowStatus } from "../components/flow-status/flow-status";
+
+export default function Page() {
   return (
-    <main>
-      <h1>AIDeFiFuel DashBoard</h1>
-      <WalletConnect />
-
-      <div>
-        <WalletStatus />
-      </div>
+    <main className={styles.page}>
+      <Header />
+       <section className={styles.gridMain}>
+        {/* <Timeline /> */}
+        <FlowStatus />
+      </section>
     </main>
-  )
+  );
 }
