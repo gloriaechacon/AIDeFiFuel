@@ -27,9 +27,11 @@ env/
 # Logs
 *.log
 
-# server
+# server folders
 station_state.json
 node_modules/
-backend/smartcontract/expense-vault/
-backend/smartcontract/
+
+# local-only smartcontracts (handled by teammate)
 smartcontracts/
+backend/smartcontract/
+backend/smartcontract/expense-vault/

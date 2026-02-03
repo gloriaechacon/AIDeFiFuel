@@ -1,1 +1,4 @@
 station_state.json
+# server folders
+node_modules
+smartcontract
