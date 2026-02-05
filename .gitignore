@@ -32,14 +32,13 @@ station_state.json
 node_modules/
 
 # smartcontracts (Foundry/Hardhat)
-backend/smartcontract/**/out/
-backend/smartcontract/**/cache/
-backend/smartcontract/**/broadcast/
-backend/smartcontract/**/.forge/
-backend/smartcontract/**/coverage/
-backend/smartcontract/**/artifacts/
-backend/smartcontract/**/typechain*/
-backend/smartcontract/**/coverage.json
-backend/smartcontract/**/lcov.info
-backend/smartcontract/**/gas-report.txt
-backend/smartcontract/expense-vault/
+backend/smartcontract/out/
+backend/smartcontract/cache/
+backend/smartcontract/broadcast/
+backend/smartcontract/lib/
+backend/smartcontract/.github/
+backend/smartcontract/.vscode/
+backend/smartcontract/.gitignore
+backend/smartcontract/.gitmodules
+backend/smartcontract/foundry.toml
+backend/smartcontract/foundry.lock
