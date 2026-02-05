@@ -42,3 +42,4 @@ backend/smartcontract/**/typechain*/
 backend/smartcontract/**/coverage.json
 backend/smartcontract/**/lcov.info
 backend/smartcontract/**/gas-report.txt
+backend/smartcontract/expense-vault/
