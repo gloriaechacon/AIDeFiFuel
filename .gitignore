@@ -31,7 +31,14 @@ env/
 station_state.json
 node_modules/
 
-# local-only smartcontracts (handled by teammate)
-smartcontracts/
-backend/smartcontract/
-backend/smartcontract/expense-vault/
+# smartcontracts (Foundry/Hardhat)
+backend/smartcontract/**/out/
+backend/smartcontract/**/cache/
+backend/smartcontract/**/broadcast/
+backend/smartcontract/**/.forge/
+backend/smartcontract/**/coverage/
+backend/smartcontract/**/artifacts/
+backend/smartcontract/**/typechain*/
+backend/smartcontract/**/coverage.json
+backend/smartcontract/**/lcov.info
+backend/smartcontract/**/gas-report.txt
