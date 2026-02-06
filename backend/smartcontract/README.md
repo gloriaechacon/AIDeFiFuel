@@ -1,66 +1,35 @@
-## Foundry
+# Smart Contracts
 
-**Foundry is a blazing fast, portable and modular toolkit for Ethereum application development written in Rust.**
+**Purpose**
+On-chain ExpenseVault that holds user funds, enforces spend policies for utility agents, and optionally invests idle balances into a liquidity pool strategy.
 
-Foundry consists of:
+**Core Contracts**
+- `ExpenseVault.sol`: USDC vault with delegated spend policies, merchant whitelists, and EIP-712 signatures.
+- `LiquidityPoolStrategy.sol`: strategy adapter that deposits vault idle funds into a pool.
+- `SimulatedLiquidityPool.sol`: simple yield simulator for tests and demos.
+- `IERC20.sol`: minimal ERC-20 interface.
 
-- **Forge**: Ethereum testing framework (like Truffle, Hardhat and DappTools).
-- **Cast**: Swiss army knife for interacting with EVM smart contracts, sending transactions and getting chain data.
-- **Anvil**: Local Ethereum node, akin to Ganache, Hardhat Network.
-- **Chisel**: Fast, utilitarian, and verbose solidity REPL.
+**Architecture Notes**
+- Users deposit USDC and receive vault shares.
+- Policies allow a `spender` to pay `merchant` addresses under limits.
+- `rebalance()` moves idle funds to the strategy while keeping a reserve in the vault.
 
-## Documentation
-
-https://book.getfoundry.sh/
-
-## Usage
-
-### Build
-
-```shell
-$ forge build
+**Commands**
+```bash
+cd backend/smartcontract
+forge build
+forge test
+forge fmt
 ```
 
-### Test
-
-```shell
-$ forge test
+**Deploy (example)**
+```bash
+cd backend/smartcontract
+forge script script/DeployAndSetup.s.sol --rpc-url "$RPC_URL" --private-key "$DEPLOYER_PRIVATE_KEY" --broadcast
 ```
 
-### Format
-
-```shell
-$ forge fmt
-```
-
-### Gas Snapshots
-
-```shell
-$ forge snapshot
-```
-
-### Anvil
-
-```shell
-$ anvil
-```
-
-### Deploy
-
-```shell
-$ forge script script/Counter.s.sol:CounterScript --rpc-url <your_rpc_url> --private-key <your_private_key>
-```
-
-### Cast
-
-```shell
-$ cast <subcommand>
-```
-
-### Help
-
-```shell
-$ forge --help
-$ anvil --help
-$ cast --help
-```
+**Configuration**
+Set these in `backend/smartcontract/.env`:
+- `RPC_URL`
+- `DEPLOYER_PRIVATE_KEY`
+- `OWNER_PRIVATE_KEY`
