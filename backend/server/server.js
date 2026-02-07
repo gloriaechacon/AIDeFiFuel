@@ -6,6 +6,7 @@ import { JsonRpcProvider, Interface, getAddress, parseUnits } from "ethers";
 import { spawn } from "child_process";
 import path from "path";
 import { fileURLToPath } from "url";
+import fs from "fs";
 
 dotenv.config();
 
@@ -91,11 +92,149 @@ function summarizeInvoices() {
   };
 }
 
+function toUiTimelineEvent(ev) {
+  const ts = ev.ts ? Date.parse(ev.ts) : Date.now();
+  const timestamp = Number.isNaN(ts) ? Date.now() : ts;
+
+  function base(type, title, description, status = "info", meta = {}) {
+    return {
+      id: ev.id,
+      type,
+      title,
+      description,
+      timestamp,
+      status,
+      meta,
+    };
+  }
+
+  switch (ev.type) {
+    case "USER_SELECTED_SERVICE":
+      return base(
+        "QUOTE_REQUESTED",
+        "User Selected Service",
+        `${ev.business_case || "service"} selected by user`,
+        "info",
+        ev.request || {}
+      );
+
+    case "DEVICE_SELECTED":
+      return base(
+        "QUOTE_REQUESTED",
+        "Device Selected",
+        ev.device_name ? `${ev.device_name} selected` : "Device selected",
+        "info",
+        {
+          device_id: ev.device_id || null,
+          distance_meters: ev.distance_meters ?? null,
+        }
+      );
+
+    case "QUOTE_REQUEST":
+      return base(
+        "QUOTE_REQUESTED",
+        "Quote Requested",
+        `Quote requested for ${ev.business_case || "service"}`,
+        "info",
+        ev.payload || {}
+      );
+
+    case "PAYMENT_REQUIRED":
+      return base(
+        "PAYMENT_REQUIRED_402",
+        "Micropayment Required",
+        "Payment gate enforced before access",
+        "warning",
+        {
+          Gate: ev.protocol || "x402",
+          amount_usdc: ev.amount_usdc ?? null,
+          invoice_id: ev.invoice_id || null,
+        }
+      );
+
+    case "SPEND_TX_SENT":
+      return base(
+        "PAYMENT_SUBMITTED",
+        "On-chain Payment Submitted",
+        ev.tx_hash ? `tx: ${ev.tx_hash}` : "On-chain payment submitted",
+        "info",
+        { tx_hash: ev.tx_hash || null }
+      );
+
+    case "PAYMENT_CONFIRMED":
+      return base(
+        "PAYMENT_VERIFIED",
+        "Payment Verified",
+        "On-chain spend verified",
+        "success",
+        { tx_hash: ev.tx_hash || null }
+      );
+
+    case "SERVICE_UNLOCKED":
+      return base(
+        "ACCESS_GRANTED",
+        "Service Unlocked",
+        ev.message || "Access granted",
+        "success",
+        {
+          invoice_id: ev.invoice_id || null,
+          total_usd: ev.total_usd ?? null,
+        }
+      );
+
+    case "PAYMENT_FAILED":
+      return base(
+        "ERROR",
+        "Payment Failed",
+        ev.reason || "Payment failed",
+        "error",
+        ev.error || {}
+      );
+
+    case "INVOICE_EXPIRED":
+      return base(
+        "FLOW_ABORTED",
+        "Invoice Expired",
+        "Payment window expired",
+        "error",
+        { invoice_id: ev.invoice_id || null }
+      );
+
+    case "CONFIRM_PENDING":
+      return base(
+        "PAYMENT_SUBMITTED",
+        "Awaiting Confirmation",
+        ev.reason || "Awaiting on-chain confirmation",
+        "warning",
+        { invoice_id: ev.invoice_id || null }
+      );
+
+    case "AGENT_RUN_FAILED":
+      return base(
+        "ERROR",
+        "Agent Failed",
+        ev.reason || "Agent execution failed",
+        "error"
+      );
+
+    default:
+      return base(
+        "ERROR",
+        "Unknown Event",
+        "Unmapped event in timeline",
+        "warning",
+        { raw_type: ev.type || "UNKNOWN" }
+      );
+  }
+}
+
 // --------------------
 // Agent runner (M2M)
 // --------------------
 const ALLOWED_BUSINESS_CASES = new Set(["gas_station", "vending_machine", "laundry"]);
-const PYTHON_BIN = process.env.PYTHON_BIN || "python";
+const agentsDir = path.resolve(__dirname, "..", "agents");
+const venvPython = path.join(agentsDir, ".venv", "bin", "python");
+const PYTHON_BIN = process.env.PYTHON_BIN || (fs.existsSync(venvPython) ? venvPython : "python3");
 
 function runM2MAgent(businessCase, { timeoutMs = 120_000 } = {}) {
   return new Promise((resolve, reject) => {
@@ -104,7 +243,6 @@ function runM2MAgent(businessCase, { timeoutMs = 120_000 } = {}) {
       return;
     }
 
-    const agentsDir = path.resolve(__dirname, "..", "agents");
     const scriptPath = path.join(agentsDir, "m2m_client.py");
 
     const child = spawn(PYTHON_BIN, [scriptPath, businessCase], {
@@ -202,16 +340,99 @@ function extractJsonObjectsFromText(text) {
   return results;
 }
 
-function addAgentEventsToTimeline(events, businessCase) {
+function extractSpendTxHash(text) {
+  const m = String(text || "").match(/spend\(\) tx hash:\s*(0x[a-fA-F0-9]{64})/);
+  return m ? m[1] : null;
+}
+
+function normalizeAgentEventsForTimeline(events, stdout, businessCase) {
+  const items = [];
+
   for (const ev of events) {
-    const eventType = ev.event || ev.type || "AGENT_EVENT";
-    addTimelineEvent({
-      type: "AGENT_EVENT",
-      event: eventType,
+    const evt = ev?.event;
+    if (evt === "USER_SELECTED_SERVICE") {
+      items.push({
+        type: "USER_SELECTED_SERVICE",
+        business_case: ev.business_case || businessCase,
+        request: ev.request || null,
+        client_id: ev.client_id || null,
+        ts: ev.timestamp || undefined,
+      });
+      continue;
+    }
+
+    if (evt === "DEVICE_SELECTED") {
+      items.push({
+        type: "DEVICE_SELECTED",
+        business_case: ev.business_case || businessCase,
+        device_id: ev.device?.device_id || null,
+        device_name: ev.device?.name || null,
+        distance_meters: ev.distance_meters ?? null,
+      });
+      continue;
+    }
+
+    if (evt === "QUOTE_REQUEST") {
+      items.push({
+        type: "QUOTE_REQUEST",
+        business_case: ev.business_case || businessCase,
+        device_id: ev.device_id || null,
+        client_id: ev.client_id || null,
+        payload: ev.payload || null,
+        ts: ev.timestamp || undefined,
+      });
+      continue;
+    }
+
+    if (evt === "PAYMENT_FAILED") {
+      items.push({
+        type: "PAYMENT_FAILED",
+        invoice_id: ev.invoiceId || ev.invoice_id || null,
+        reason: ev.error?.reason || ev.error?.type || null,
+        error: ev.error || null,
+      });
+      continue;
+    }
+
+    if (evt === "SERVICE_UNLOCKED") {
+      items.push({
+        type: "SERVICE_UNLOCKED",
+        invoice_id: ev.invoiceId || ev.invoice_id || null,
+        business_case: ev.business_case || businessCase,
+        device_id: ev.device_id || null,
+        client_id: ev.client_id || null,
+        total_usd: ev.totalUsd ?? null,
+        message: ev.message || null,
+      });
+      continue;
+    }
+
+    if (ev?.payment_required?.protocol) {
+      const pr = ev.payment_required;
+      items.push({
+        type: "PAYMENT_REQUIRED",
+        protocol: pr.protocol,
+        business_case: pr.business_case || businessCase,
+        device_id: pr.device_id || null,
+        client_id: pr.client_id || null,
+        invoice_id: pr.invoice_id || ev.invoiceId || null,
+        amount_usdc: pr.amount_usdc ?? null,
+        amount_base_units: pr.amount_base_units || null,
+      });
+      continue;
+    }
+  }
+
+  const txHash = extractSpendTxHash(stdout);
+  if (txHash) {
+    items.push({
+      type: "SPEND_TX_SENT",
+      tx_hash: txHash,
       business_case: businessCase,
-      payload: ev,
     });
   }
+
+  return items;
 }
 
 // ExpenseVault event ABI (minimal)
@@ -991,7 +1212,9 @@ app.get("/ui/timeline", (req, res) => {
   }
 
   const lim = Math.max(1, Math.min(200, Number(limit) || 50));
-  res.json({ ok: true, items: items.slice(0, lim) });
+  const rawItems = items.slice(0, lim);
+  const uiItems = rawItems.map(toUiTimelineEvent);
+  res.json({ ok: true, items: uiItems, raw_items: rawItems });
 });
 
 app.get("/ui/summary", (req, res) => {
@@ -1026,8 +1249,9 @@ app.post("/agents/m2m/run", async (req, res) => {
     const ok = result.code === 0;
 
     const parsedEvents = extractJsonObjectsFromText(result.stdout);
-    if (parsedEvents.length > 0) {
-      addAgentEventsToTimeline(parsedEvents, businessCase);
+    const timelineItems = normalizeAgentEventsForTimeline(parsedEvents, result.stdout, businessCase);
+    for (const item of timelineItems) {
+      addTimelineEvent(item);
     }
 
     addTimelineEvent({

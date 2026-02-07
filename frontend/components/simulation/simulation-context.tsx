@@ -4,25 +4,19 @@ import React, { createContext, useContext, useCallback, useMemo, useState, useEf
 import type { SimulationMode, SimulationState, TimelineEvent } from "./types";
 
 const initialState: SimulationState = {
-  mode: "local",
+  mode: "testnet",
   isRunning: false,
   flowState: "NEED_ACCESS",
   flowStartedAt: undefined,
   timeline: [],
   dashboardStats: {
-    expenseVaultBalanceUsdc: 125.4,
-    yieldEarnedUsdc: 0.38,
+    expenseVaultBalanceUsdc: 0,
+    yieldEarnedUsdc: 0,
     paymentGateStatus: "None",
     lastPaymentTimestamp: undefined,
     lastPaymentAmountUsdc: undefined,
   },
 };
-
-const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
-
-function generateYieldFee(min: number, max: number) {
-  return Math.random() * (max - min) + min;
-}
 
 function safeId() {
   return typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : String(Date.now());
@@ -45,39 +39,81 @@ const SimulationContext = createContext<SimulationContextValue | null>(null);
 
 export function SimulationProvider({ children }: { children: React.ReactNode }) {
   const [state, setState] = useState<SimulationState>(initialState);
-  const yieldTimerRef = useRef<number | null>(null);
+  const pollTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
-    if (yieldTimerRef.current) {
-      window.clearInterval(yieldTimerRef.current);
-      yieldTimerRef.current = null;
+    const serverUrl = process.env.NEXT_PUBLIC_SERVER_URL || "http://localhost:3001";
+
+    async function fetchTimeline() {
+      const resp = await fetch(`${serverUrl}/ui/timeline?limit=100`);
+      if (!resp.ok) throw new Error(`timeline fetch failed: ${resp.status}`);
+      const data = await resp.json();
+      return Array.isArray(data.items) ? data.items : [];
     }
 
-    if (state.mode !== "local") return;
+    async function poll() {
+      try {
+        const timeline = await fetchTimeline();
 
-    yieldTimerRef.current = window.setInterval(() => {
-      setState((s) => {
-        if (s.dashboardStats.expenseVaultBalanceUsdc <= 0) return s;
+        setState((s) => {
+          const lastPaymentEvent = timeline.find((e: TimelineEvent) =>
+            e.type === "ACCESS_GRANTED" || e.type === "PAYMENT_VERIFIED"
+          );
 
-        const fee = generateYieldFee(0.01, 0.06);
+          const latest = timeline[timeline.length - 1];
+          const flowState =
+            latest?.type === "PAYMENT_REQUIRED_402"
+              ? "AWAITING_AUTHORIZATION"
+              : latest?.type === "PAYMENT_VERIFIED" || latest?.type === "ACCESS_GRANTED"
+                ? "AUTHORIZATION_CONFIRMED"
+                : latest?.type === "SERVICE_FULFILLED"
+                  ? "COMPLETED"
+                  : latest?.type === "FLOW_ABORTED" || latest?.type === "ERROR"
+                    ? "ABORTED"
+                    : latest?.type === "QUOTE_REQUESTED"
+                      ? "NEED_ACCESS"
+                      : s.flowState;
 
-        return {
-          ...s,
-          dashboardStats: {
-            ...s.dashboardStats,
-            yieldEarnedUsdc: +(s.dashboardStats.yieldEarnedUsdc + fee).toFixed(2),
-          },
-        };
-      });
-    }, 12000);
+          const paymentGateStatus =
+            timeline.some((e: TimelineEvent) => e.type === "PAYMENT_VERIFIED" || e.type === "ACCESS_GRANTED")
+              ? "Verified"
+              : timeline.some((e: TimelineEvent) => e.type === "PAYMENT_REQUIRED_402")
+                ? "Pending"
+                : "None";
+
+          const shouldStop =
+            timeline.some((e: TimelineEvent) =>
+              ["ACCESS_GRANTED", "SERVICE_FULFILLED", "FLOW_ABORTED", "ERROR"].includes(e.type)
+            );
+
+          return {
+            ...s,
+            isRunning: shouldStop ? false : s.isRunning,
+            flowState,
+            timeline,
+            dashboardStats: {
+              ...s.dashboardStats,
+              paymentGateStatus,
+              lastPaymentTimestamp: lastPaymentEvent?.timestamp,
+              lastPaymentAmountUsdc: (lastPaymentEvent?.meta as any)?.total_usd ?? s.dashboardStats.lastPaymentAmountUsdc,
+            },
+          };
+        });
+      } catch (err) {
+        console.error("poll error:", err);
+      }
+    }
+
+    poll();
+    pollTimerRef.current = window.setInterval(poll, 3000);
 
     return () => {
-      if (yieldTimerRef.current) {
-        window.clearInterval(yieldTimerRef.current);
-        yieldTimerRef.current = null;
+      if (pollTimerRef.current) {
+        window.clearInterval(pollTimerRef.current);
+        pollTimerRef.current = null;
       }
     };
-  }, [state.mode]);
+  }, []);
 
   const setMode = useCallback((mode: SimulationMode) => {
     setState((s) => ({ ...s, mode }));
@@ -109,77 +145,6 @@ export function SimulationProvider({ children }: { children: React.ReactNode }) 
       flowState: "NEED_ACCESS",
       timeline: [],
       dashboardStats: { ...s.dashboardStats, paymentGateStatus: "None" },
-    }));
-
-    setState((s) => ({
-      ...s,
-      timeline: addEvent(s.timeline, {
-        type: "QUOTE_REQUESTED",
-        title: "Service Quote Requested",
-        description: "Agent requested a quote for a protected service",
-        status: "info",
-      }),
-    }));
-
-    await wait(900);
-
-    setState((s) => ({
-      ...s,
-      flowState: "AWAITING_AUTHORIZATION",
-      timeline: addEvent(s.timeline, {
-        type: "PAYMENT_REQUIRED_402",
-        title: "Micropayment Required",
-        description: "Service enforced a payment gate before granting access",
-        status: "warning",
-        meta: { Gate: "0x402" },
-      }),
-    }));
-
-    await wait(1100);
-
-    setState((s) => ({
-      ...s,
-      flowState: "AUTHORIZATION_CONFIRMED",
-      dashboardStats: { ...s.dashboardStats, paymentGateStatus: "Verified" },
-      timeline: addEvent(s.timeline, {
-        type: "ACCESS_GRANTED",
-        title: "Access Granted",
-        description: "Payment verified; access authorized",
-        status: "success",
-      }),
-    }));
-
-    await wait(1000);
-
-    setState((s) => ({
-      ...s,
-      flowState: "ACCESSING_RESOURCE",
-      timeline: addEvent(s.timeline, {
-        type: "RESOURCE_ACCESS_STARTED",
-        title: "Resource Access Started",
-        description: "Autonomous session started",
-        status: "info",
-      }),
-    }));
-
-    await wait(1200);
-
-    setState((s) => ({
-      ...s,
-      flowState: "COMPLETED",
-      isRunning: false,
-      dashboardStats: {
-        ...s.dashboardStats,
-        lastPaymentAmountUsdc: 12,
-        lastPaymentTimestamp: Date.now(),
-        expenseVaultBalanceUsdc: +(s.dashboardStats.expenseVaultBalanceUsdc - 12).toFixed(2),
-      },
-      timeline: addEvent(s.timeline, {
-        type: "SERVICE_FULFILLED",
-        title: "Service Fulfilled",
-        description: "Autonomous payment + access completed successfully",
-        status: "success",
-      }),
     }));
   }, []);
 

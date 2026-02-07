@@ -12,12 +12,29 @@ export function ActionBar() {
   const [fundOpen, setFundOpen] = useState(false);
   const [withdrawOpen, setWithdrawOpen] = useState(false);
 
+  async function handleStartSession() {
+    start();
+    const serverUrl = process.env.NEXT_PUBLIC_SERVER_URL || "http://localhost:3001";
+    try {
+      const resp = await fetch(`${serverUrl}/agents/m2m/run`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ business_case: "vending_machine" }),
+      });
+      if (!resp.ok) {
+        const text = await resp.text();
+        console.error("Start Session failed:", resp.status, text);
+      }
+    } catch (err) {
+      console.error("Start Session error:", err);
+    }
+  }
 
 
   return (
     <section className={styles.bar}>
       <div className={styles.left}>
-        <Button onClick={start} disabled={state.isRunning}>Start Session</Button>
+        <Button onClick={handleStartSession} disabled={state.isRunning}>Start Session</Button>
         {!isLocal && (
           <Button variant="secondary" onClick={reset}>Reset</Button>
         )}
