@@ -1,7 +1,7 @@
-# AIDeFiFuel
+# DeFi Utility Bots
 
 **Overview**
-AIDeFiFuel is a machine-to-machine payments demo where users deposit USDC into an on-chain ExpenseVault. Utility agents pay merchants on-chain for services like gas pumps, laundry, and vending machines. Idle funds can be allocated to a liquidity pool strategy to earn yield until they are needed for spend.
+DeFi Utility Bots is a machine-to-machine payments demo where users deposit USDC into an on-chain ExpenseVault. Utility agents pay merchants on-chain for services like gas pumps, laundry, and vending machines. Idle funds can be allocated to a liquidity pool strategy to earn yield until they are needed for spend.
 
 **Business Case**
 - Users pre-fund a vault for recurring utility expenses.

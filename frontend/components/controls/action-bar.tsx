@@ -9,6 +9,7 @@ import { useState } from "react";
 export function ActionBar() {
   const { start, reset, state } = useSimulation();
   const isLocal = state.mode === "local";
+  const noBusinessCase = !state.selectedBusinessCase;
   const [fundOpen, setFundOpen] = useState(false);
   const [withdrawOpen, setWithdrawOpen] = useState(false);
 
@@ -19,7 +20,7 @@ export function ActionBar() {
       const resp = await fetch(`${serverUrl}/agents/m2m/run`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ business_case: "vending_machine" }),
+        body: JSON.stringify({ business_case: state.selectedBusinessCase }),
       });
       if (!resp.ok) {
         const text = await resp.text();
@@ -34,7 +35,9 @@ export function ActionBar() {
   return (
     <section className={styles.bar}>
       <div className={styles.left}>
-        <Button onClick={handleStartSession} disabled={state.isRunning}>Start Session</Button>
+        <Button onClick={handleStartSession} disabled={state.isRunning || noBusinessCase}>
+          Start Session
+        </Button>
         {!isLocal && (
           <Button variant="secondary" onClick={reset}>Reset</Button>
         )}

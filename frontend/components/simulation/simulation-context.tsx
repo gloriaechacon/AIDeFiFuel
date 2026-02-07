@@ -1,7 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useCallback, useMemo, useState, useEffect, useRef } from "react";
-import type { SimulationMode, SimulationState, TimelineEvent } from "./types";
+import type { SimulationMode, SimulationState, TimelineEvent, BusinessCase } from "./types";
 
 const initialState: SimulationState = {
   mode: "testnet",
@@ -16,6 +16,7 @@ const initialState: SimulationState = {
     lastPaymentTimestamp: undefined,
     lastPaymentAmountUsdc: undefined,
   },
+  selectedBusinessCase: null,
 };
 
 function safeId() {
@@ -29,6 +30,7 @@ function addEvent(prev: TimelineEvent[], ev: Omit<TimelineEvent, "id" | "timesta
 type SimulationContextValue = {
   state: SimulationState;
   setMode: (mode: SimulationMode) => void;
+  setBusinessCase: (businessCase: BusinessCase | null) => void;
   start: () => Promise<void>;
   abort: (reason?: string) => void;
   reset: () => void;
@@ -119,8 +121,12 @@ export function SimulationProvider({ children }: { children: React.ReactNode }) 
     setState((s) => ({ ...s, mode }));
   }, []);
 
+  const setBusinessCase = useCallback((businessCase: BusinessCase | null) => {
+    setState((s) => ({ ...s, selectedBusinessCase: businessCase }));
+  }, []);
+
   const reset = useCallback(() => {
-    setState((s) => ({ ...initialState, mode: s.mode }));
+    setState((s) => ({ ...initialState, mode: s.mode, selectedBusinessCase: s.selectedBusinessCase }));
   }, []);
 
   const abort = useCallback((reason?: string) => {
@@ -151,8 +157,8 @@ export function SimulationProvider({ children }: { children: React.ReactNode }) 
   const sessionDurationSec = state.flowStartedAt ? Math.floor((Date.now() - state.flowStartedAt) / 1000) : 0;
 
   const value = useMemo(
-    () => ({ state, setMode, start, abort, reset, sessionDurationSec }),
-    [state, setMode, start, abort, reset, sessionDurationSec]
+    () => ({ state, setMode, setBusinessCase, start, abort, reset, sessionDurationSec }),
+    [state, setMode, setBusinessCase, start, abort, reset, sessionDurationSec]
   );
 
   return <SimulationContext.Provider value={value}>{children}</SimulationContext.Provider>;

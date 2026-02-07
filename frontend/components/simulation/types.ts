@@ -1,4 +1,5 @@
 export type SimulationMode = "local" | "testnet";
+export type BusinessCase = "vending_machine" | "laundry" | "gas_station";
 
 export type FlowState =
     | "NEED_ACCESS"
@@ -44,4 +45,5 @@ export interface SimulationState {
     flowStartedAt?: number;
     timeline: TimelineEvent[];
     dashboardStats: DashboardStats;
+    selectedBusinessCase: BusinessCase | null;
 }
