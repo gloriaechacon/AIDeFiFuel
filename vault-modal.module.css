@@ -1,0 +1,136 @@
+.backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.6);
+  backdrop-filter: blur(4px);
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  z-index: 50;
+}
+
+.modal {
+  width: 100%;
+  max-width: 420px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  padding: 24px;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.title {
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--foreground);
+}
+
+.close {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  border-radius: var(--radius);
+  width: 36px;
+  height: 36px;
+  cursor: pointer;
+  color: var(--foreground-muted);
+  transition: all 150ms ease;
+}
+
+.close:hover {
+  background: var(--border);
+  color: var(--foreground);
+}
+
+.note {
+  font-size: 13px;
+  color: var(--foreground-muted);
+  background: var(--accent-muted);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  margin-bottom: 16px;
+  line-height: 1.5;
+}
+
+.formRow {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.label {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--foreground-muted);
+}
+
+.inputWrap {
+  display: flex;
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 16px;
+  gap: 12px;
+  transition: border-color 150ms ease;
+}
+
+.inputWrap:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-muted);
+}
+
+.input {
+  flex: 1;
+  border: none;
+  outline: none;
+  font-size: 16px;
+  background: transparent;
+  color: var(--foreground);
+}
+
+.input::placeholder {
+  color: var(--foreground-muted);
+  opacity: 0.6;
+}
+
+.suffix {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--foreground-muted);
+}
+
+.footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.error {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: var(--radius);
+  color: var(--error);
+  font-size: 13px;
+  background: var(--error-muted);
+  border: 1px solid var(--error);
+}
+.success {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: var(--radius);
+  color: var(--success);
+  font-size: 13px;
+  background: var(--success-muted);
+  border: 1px solid var(--success);
+}
