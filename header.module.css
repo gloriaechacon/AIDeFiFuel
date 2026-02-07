@@ -1,0 +1,47 @@
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.titleRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.title {
+  font-size: 22px;
+  margin: 0;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--foreground);
+}
+
+.backendStatus {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-sm);
+}
+
+.backendStatus[data-status="connected"] {
+  color: var(--success);
+  border-color: var(--success-muted);
+  background: var(--success-muted);
+}
+
+.backendStatus[data-status="error"] {
+  color: var(--foreground-muted);
+  background: var(--surface);
+}
+
+.backendStatus[data-status="idle"] {
+  color: var(--foreground-muted);
+}
