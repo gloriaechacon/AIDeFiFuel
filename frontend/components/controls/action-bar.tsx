@@ -4,12 +4,14 @@ import styles from "./action-bar.module.css";
 import { Button } from "./button";
 import { useSimulation } from "../simulation/simulation-context";
 import { VaultModal } from "@/components/vault/vault-modal";
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { createWagmiVaultAdapter } from "@/components/vault/vault-adapter-wagmi";
 
 export function ActionBar() {
   const { start, reset, state } = useSimulation();
   const isLocal = state.mode === "local";
   const noBusinessCase = !state.selectedBusinessCase;
+  const isTestnet = state.mode === "testnet";
   const [fundOpen, setFundOpen] = useState(false);
   const [withdrawOpen, setWithdrawOpen] = useState(false);
 
@@ -31,6 +33,9 @@ export function ActionBar() {
     }
   }
 
+  const vaultAdapter = useMemo(() => {
+    return isTestnet ? createWagmiVaultAdapter() : null;
+  }, [isTestnet]);
 
   return (
     <section className={styles.bar}>
@@ -57,6 +62,7 @@ export function ActionBar() {
         title="Fund Expense Vault"
         modeLabel="Fund"
         onClose={() => setFundOpen(false)}
+        onConfirm={isTestnet ? vaultAdapter!.fund : undefined}
       />
 
       <VaultModal
@@ -64,6 +70,7 @@ export function ActionBar() {
         title="Withdraw from Expense Vault"
         modeLabel="Withdraw"
         onClose={() => setWithdrawOpen(false)}
+        onConfirm={isTestnet ? vaultAdapter!.withdraw : undefined}
       />
     </section>
   );
