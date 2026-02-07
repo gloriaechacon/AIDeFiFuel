@@ -3,6 +3,8 @@
 import styles from "./metrics-row.module.css";
 import { MetricsCard } from "./metrics-card";
 import { useSimulation } from "../simulation/simulation-context";
+import { useUiSummary } from "./use-summary";
+import { useYieldEarnedOnChain } from "./use-yield-earned";
 
 function fmtUsdc(n?: number) {
   if (typeof n !== "number") return "—";
@@ -21,27 +23,68 @@ function timeAgo(ts?: number) {
 
 export function MetricsRow() {
   const { state } = useSimulation();
-  const stats = state.dashboardStats;
+  const isTestnet = state.mode === "testnet";
+  const vaultAddress = "0x85E531644812B584c953aBd6cB681A76ee138dD9" as const;
+const strategyAddress = process.env.NEXT_PUBLIC_STRATEGY_ADDRESS as `0x${string}`;
+
+const { yieldUsdc } = useYieldEarnedOnChain(isTestnet, {
+  vaultAddress,
+  strategyAddress,
+});
+  const { data: summary, error: summaryError, loading: summaryLoading } = useUiSummary(isTestnet);
+  const statsLocal = state.dashboardStats;
+
+  const getFirstNumericField = (
+    source: Record<string, unknown> | null | undefined,
+    candidateKeys: string[]
+  ): number | undefined => {
+    for (const key of candidateKeys) {
+      const value = source?.[key];
+      if (typeof value === "number") return value;
+    }
+    return undefined;
+  };
+
+  const getFirstTimestampField = (
+    source: Record<string, unknown> | null | undefined,
+    candidateKeys: string[]
+  ): number | undefined => {
+    for (const key of candidateKeys) {
+      const value = source?.[key];
+      if (typeof value === "number") return value;
+    }
+    return undefined;
+  };
+
+  const statsFinal = isTestnet && summary
+  ? {
+      expenseVaultBalanceUsdc: getFirstNumericField(summary, ["expenseVaultBalanceUsdc", "vaultBalanceUsdc", "vaultBalance"]),
+      yieldEarnedUsdc: yieldUsdc ? Number(yieldUsdc) : undefined,
+      lastPaymentAmountUsdc: getFirstNumericField(summary, ["lastPaymentAmountUsdc", "lastPaymentUsdc", "lastPaymentAmount"]),
+      lastPaymentTimestamp: getFirstTimestampField(summary, ["lastPaymentTimestamp", "lastPaymentTs", "lastPaymentTime"]),
+    }
+  : statsLocal;
+
 
   return (
     <section className={styles.row}>
       <MetricsCard
         title="Expense Vault Balance"
-        value={fmtUsdc(stats.expenseVaultBalanceUsdc)}
+        value={fmtUsdc(statsFinal.expenseVaultBalanceUsdc)}
         icon={<span>💳</span>}
       />
 
       <MetricsCard
         title="Yield Earned"
-        value={fmtUsdc(stats.yieldEarnedUsdc)}
+        value={fmtUsdc(statsFinal.yieldEarnedUsdc)}
         sub="fees generated while idle"
         icon={<span>📈</span>}
       />
 
       <MetricsCard
         title="Last Payment"
-        value={stats.lastPaymentAmountUsdc ? `$${stats.lastPaymentAmountUsdc.toFixed(2)}` : "—"}
-        sub={stats.lastPaymentTimestamp ? timeAgo(stats.lastPaymentTimestamp) : "—"}
+        value={statsFinal.lastPaymentAmountUsdc ? `$${statsFinal.lastPaymentAmountUsdc.toFixed(2)}` : "—"}
+        sub={statsFinal.lastPaymentTimestamp ? timeAgo(statsFinal.lastPaymentTimestamp) : "—"}
         icon={<span>🧾</span>}
       />
     </section>
