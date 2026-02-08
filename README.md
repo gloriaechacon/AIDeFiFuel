@@ -1,5 +1,10 @@
 # DeFi Utility Bots
 
+**Client & Server URLs**
+
+Client: https://defiutilitybots.netlify.app/
+Server: https://defibot-ximv.onrender.com
+
 **Overview**
 DeFi Utility Bots is a machine-to-machine payments demo where users deposit USDC into an on-chain ExpenseVault. Utility agents pay merchants on-chain for services like gas pumps, laundry, and vending machines. Idle funds can be allocated to a liquidity pool strategy to earn yield until they are needed for spend.
 
