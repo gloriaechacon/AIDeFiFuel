@@ -2,7 +2,7 @@
 
 **Client & Server URLs**
 
-Client: https://defiutilitybots.netlify.app/
+Client: https://defiutilitybots.netlify.app/ </br>
 Server: https://defibot-ximv.onrender.com
 
 **Overview**
