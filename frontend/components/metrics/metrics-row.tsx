@@ -4,11 +4,17 @@ import styles from "./metrics-row.module.css";
 import { MetricsCard } from "./metrics-card";
 import { useSimulation } from "../simulation/simulation-context";
 import { useUiSummary } from "./use-summary";
-import { useYieldEarnedOnChain } from "./use-yield-earned";
+import { useVaultBalance } from "./use-vault-balance";
 
 function fmtUsdc(n?: number) {
   if (typeof n !== "number") return "—";
   return `${n.toFixed(2)} USDC`;
+}
+
+function shortHash(hash?: string) {
+  if (!hash) return "—";
+  if (hash.length <= 12) return hash;
+  return `${hash.slice(0, 6)}…${hash.slice(-4)}`;
 }
 
 function timeAgo(ts?: number) {
@@ -24,14 +30,9 @@ function timeAgo(ts?: number) {
 export function MetricsRow() {
   const { state } = useSimulation();
   const isTestnet = state.mode === "testnet";
-  const vaultAddress = "0x85E531644812B584c953aBd6cB681A76ee138dD9" as const;
-const strategyAddress = process.env.NEXT_PUBLIC_STRATEGY_ADDRESS as `0x${string}`;
-
-const { yieldUsdc } = useYieldEarnedOnChain(isTestnet, {
-  vaultAddress,
-  strategyAddress,
-});
   const { data: summary, error: summaryError, loading: summaryLoading } = useUiSummary(isTestnet);
+  const { data: vaultBalance } = useVaultBalance(isTestnet);
+  const vaultAddress = vaultBalance?.vault_address as `0x${string}` | undefined;
   const statsLocal = state.dashboardStats;
 
   const getFirstNumericField = (
@@ -58,10 +59,12 @@ const { yieldUsdc } = useYieldEarnedOnChain(isTestnet, {
 
   const statsFinal = isTestnet && summary
   ? {
-      expenseVaultBalanceUsdc: getFirstNumericField(summary, ["expenseVaultBalanceUsdc", "vaultBalanceUsdc", "vaultBalance"]),
-      yieldEarnedUsdc: yieldUsdc ? Number(yieldUsdc) : undefined,
+      expenseVaultBalanceUsdc: vaultBalance?.amount_usdc ?? getFirstNumericField(summary, ["expenseVaultBalanceUsdc", "vaultBalanceUsdc", "vaultBalance"]),
+      yieldEarnedUsdc: vaultBalance?.yield_usdc ?? undefined,
       lastPaymentAmountUsdc: getFirstNumericField(summary, ["lastPaymentAmountUsdc", "lastPaymentUsdc", "lastPaymentAmount"]),
-      lastPaymentTimestamp: getFirstTimestampField(summary, ["lastPaymentTimestamp", "lastPaymentTs", "lastPaymentTime"]),
+      lastPaymentTimestamp: getFirstTimestampField(summary, ["lastPaymentTimestamp", "lastPaymentTs", "lastPaymentTime"])
+        ?? statsLocal.lastPaymentTimestamp,
+      lastPaymentTxHash: statsLocal.lastPaymentTxHash,
     }
   : statsLocal;
 
@@ -83,7 +86,7 @@ const { yieldUsdc } = useYieldEarnedOnChain(isTestnet, {
 
       <MetricsCard
         title="Last Payment"
-        value={statsFinal.lastPaymentAmountUsdc ? `$${statsFinal.lastPaymentAmountUsdc.toFixed(2)}` : "—"}
+        value={statsFinal.lastPaymentTxHash ? `tx: ${shortHash(statsFinal.lastPaymentTxHash)}` : "—"}
         sub={statsFinal.lastPaymentTimestamp ? timeAgo(statsFinal.lastPaymentTimestamp) : "—"}
         icon={<span>🧾</span>}
       />

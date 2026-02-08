@@ -24,9 +24,9 @@ DeFi Utility Bots is a machine-to-machine payments demo where users deposit USDC
 
 ##### base-sepolia
 
-Vault Contract Address: 0x4F7724F952A5e9692aB9501e74DB2A07Afa56c16 </br>
-SimulatedLiquidityPool contract address: 0xc715B3F0dA1A66fCd4D0E1463bE6f89605cf3ABB </br>
-LiquidityPoolStrategy contract address: 0x8eBDbb325eeAb715e6A7A902BB1D59C7e4274af9
+Vault Contract Address: 0xcD0929E149EACfF1a1b3C4cd9dd08B4e17b6D2c1 </br>
+SimulatedLiquidityPool contract address: 0x01Aad94D3071EC8c26dEF854f92aaD46DF5cf52A </br>
+LiquidityPoolStrategy contract address: 0x25cDE49d19ca3BD2703E176c6e364a10be250fC8
 
 
 **Quickstart**

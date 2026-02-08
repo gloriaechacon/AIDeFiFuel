@@ -14,10 +14,21 @@ abstract contract ReentrancyGuard {
     }
 }
 
+interface ILiquidityPoolStrategy {
+    function totalAssets() external view returns (uint256);
+    function depositFromVault(uint256 amount) external;
+    function withdrawToVault(uint256 amount) external;
+}
+
 contract ExpenseVault is ReentrancyGuard {
     /// @dev Underlying asset (USDC on Base Sepolia for the demo).
-    /// Pass the real token address in the constructor (no mocks).
     IERC20 public immutable token; // USDC uses 6 decimals
+
+    /// @dev Admin for configuring strategy/keeper-like actions (hackathon-friendly).
+    address public immutable admin;
+
+    /// @dev Optional yield strategy.
+    ILiquidityPoolStrategy public strategy;
 
     // Shares accounting
     uint256 public totalSupply;
@@ -90,9 +101,19 @@ contract ExpenseVault is ReentrancyGuard {
         uint256 dayIndex
     );
 
+    event StrategySet(address indexed newStrategy);
+    event Invested(uint256 amount);
+    event Divested(uint256 amount);
+
+    modifier onlyAdmin() {
+        require(msg.sender == admin, "only admin");
+        _;
+    }
+
     constructor(address _token) {
         require(_token != address(0), "bad token");
         token = IERC20(_token);
+        admin = msg.sender;
 
         DOMAIN_SEPARATOR = keccak256(
             abi.encode(
@@ -105,9 +126,56 @@ contract ExpenseVault is ReentrancyGuard {
         );
     }
 
-    /// @dev Current on-vault liquidity. (Strategy integration will expand this in later files.)
+    /// @notice Total assets owned by the vault (idle in vault + invested in strategy).
     function totalAssets() public view returns (uint256) {
-        return token.balanceOf(address(this));
+        uint256 idle = token.balanceOf(address(this));
+        address strat = address(strategy);
+        if (strat == address(0)) return idle;
+
+        uint256 invested = strategy.totalAssets();
+        return idle + invested;
+    }
+
+    function setStrategy(address _strategy) external onlyAdmin {
+        // Allow setting to zero to disable strategy.
+        if (_strategy != address(0)) {
+            // Basic sanity: strategy must target this vault (enforced in strategy constructor in your version),
+            // but we don't depend on it here.
+        }
+        strategy = ILiquidityPoolStrategy(_strategy);
+        emit StrategySet(_strategy);
+    }
+
+    /// @notice Move idle funds from the vault into the strategy (to generate yield).
+    /// @dev Admin-controlled for hackathon/demo safety.
+    function invest(uint256 amount) external onlyAdmin nonReentrant {
+        require(amount > 0, "amount=0");
+        address strat = address(strategy);
+        require(strat != address(0), "no strategy");
+
+        // Ensure we have enough idle funds.
+        uint256 idle = token.balanceOf(address(this));
+        require(idle >= amount, "insufficient idle");
+
+        // Approve strategy to pull funds from the vault.
+        // Reset to 0 first for compatibility with some ERC20s.
+        require(token.approve(strat, 0), "approve reset failed");
+        require(token.approve(strat, amount), "approve failed");
+
+        // Strategy will transferFrom(vault -> strategy) and deposit into pool.
+        strategy.depositFromVault(amount);
+
+        emit Invested(amount);
+    }
+
+    /// @notice Pull funds back from the strategy into the vault.
+    function divest(uint256 amount) external onlyAdmin nonReentrant {
+        require(amount > 0, "amount=0");
+        address strat = address(strategy);
+        require(strat != address(0), "no strategy");
+
+        strategy.withdrawToVault(amount);
+        emit Divested(amount);
     }
 
     // ---------- Shares math ----------
@@ -121,28 +189,41 @@ contract ExpenseVault is ReentrancyGuard {
         totalSupply -= _shares;
     }
 
+    /// @dev Ensure the vault has at least `amount` tokens available locally.
+    /// Pulls from strategy if needed.
+    function _ensureVaultLiquidity(uint256 amount) internal {
+        uint256 idle = token.balanceOf(address(this));
+        if (idle >= amount) return;
+
+        address strat = address(strategy);
+        require(strat != address(0), "insufficient liquidity");
+
+        uint256 shortfall = amount - idle;
+        strategy.withdrawToVault(shortfall);
+
+        // After withdrawToVault, vault should have enough.
+        require(token.balanceOf(address(this)) >= amount, "liquidity still insufficient");
+    }
+
     /// @notice Deposit underlying token and receive shares.
     /// Anyone can deposit (demo-friendly).
     function deposit(uint256 _amount) external nonReentrant {
         require(_amount > 0, "amount=0");
 
-        uint256 B = token.balanceOf(address(this)); // balance before deposit
-
-        // If there are existing shares but zero underlying balance,
-        // the vault is effectively empty/insolvent for share math.
-        require(totalSupply == 0 || B > 0, "empty vault");
+        uint256 taBefore = totalAssets();
+        require(totalSupply == 0 || taBefore > 0, "empty vault");
 
         uint256 shares;
         if (totalSupply == 0) {
             shares = _amount;
         } else {
-            // shares = amount * totalSupply / balanceBefore
-            shares = (_amount * totalSupply) / B;
+            // shares = amount * totalSupply / totalAssetsBefore
+            shares = (_amount * totalSupply) / taBefore;
         }
 
         _mint(msg.sender, shares);
 
-        // USDC returns bool on transferFrom; require it to succeed.
+        // Pull underlying from user into the vault
         require(token.transferFrom(msg.sender, address(this), _amount), "transferFrom failed");
 
         emit Deposit(msg.sender, _amount, shares);
@@ -154,12 +235,14 @@ contract ExpenseVault is ReentrancyGuard {
         require(_shares > 0, "shares=0");
         require(totalSupply > 0, "empty");
 
-        uint256 B = token.balanceOf(address(this));
-        require(B > 0, "empty vault");
+        uint256 ta = totalAssets();
+        require(ta > 0, "empty vault");
 
-        uint256 amount = (_shares * B) / totalSupply;
+        uint256 amount = (_shares * ta) / totalSupply;
 
         _burn(msg.sender, _shares);
+
+        _ensureVaultLiquidity(amount);
         require(token.transfer(msg.sender, amount), "transfer failed");
 
         emit Withdraw(msg.sender, _shares, amount);
@@ -313,18 +396,19 @@ contract ExpenseVault is ReentrancyGuard {
         require(spentToday + amount <= p.dailyLimit, "exceeds dailyLimit");
         spentPerDay[owner][msg.sender][dayIndex] = spentToday + amount;
 
-        uint256 B = token.balanceOf(address(this));
-        require(B > 0 && totalSupply > 0, "empty vault");
+        uint256 ta = totalAssets();
+        require(ta > 0 && totalSupply > 0, "empty vault");
 
-        // sharesToBurn = ceil(amount * totalSupply / B)
-        uint256 sharesToBurn = (amount * totalSupply) / B;
-        if ((sharesToBurn * B) / totalSupply < amount) {
+        // sharesToBurn = ceil(amount * totalSupply / totalAssets)
+        uint256 sharesToBurn = (amount * totalSupply) / ta;
+        if ((sharesToBurn * ta) / totalSupply < amount) {
             sharesToBurn += 1;
         }
 
         require(balanceOf[owner] >= sharesToBurn, "insufficient shares");
         _burn(owner, sharesToBurn);
 
+        _ensureVaultLiquidity(amount);
         require(token.transfer(merchant, amount), "transfer failed");
 
         emit Spent(owner, msg.sender, merchant, amount, sharesToBurn, dayIndex);

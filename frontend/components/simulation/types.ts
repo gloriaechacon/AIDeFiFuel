@@ -35,6 +35,7 @@ export interface DashboardStats {
     yieldEarnedUsdc: number;
     lastPaymentTimestamp?: number;
     lastPaymentAmountUsdc?: number;
+    lastPaymentTxHash?: string;
     paymentGateStatus: "Verified" | "Pending" | "None";
 }
 

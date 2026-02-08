@@ -18,6 +18,7 @@ const initialState: SimulationState = {
     paymentGateStatus: "None",
     lastPaymentTimestamp: undefined,
     lastPaymentAmountUsdc: undefined,
+    lastPaymentTxHash: undefined,
   },
   selectedBusinessCase: "vending_machine",
 };
@@ -87,8 +88,12 @@ export function SimulationProvider({ children }: { children: React.ReactNode }) 
 
         setState((s) => {
           const lastPaymentEvent = timeline.find((e: TimelineEvent) =>
-            e.type === "ACCESS_GRANTED" || e.type === "PAYMENT_VERIFIED"
+            e.type === "PAYMENT_VERIFIED" || e.type === "PAYMENT_SUBMITTED" || e.type === "ACCESS_GRANTED"
           );
+          const lastTxHash =
+            (lastPaymentEvent?.meta as any)?.tx_hash ||
+            (lastPaymentEvent?.meta as any)?.txHash ||
+            (timeline.find((e: TimelineEvent) => (e.meta as any)?.tx_hash)?.meta as any)?.tx_hash;
 
           const latest = timeline[timeline.length - 1];
           const flowState =
@@ -126,6 +131,7 @@ export function SimulationProvider({ children }: { children: React.ReactNode }) 
               paymentGateStatus,
               lastPaymentTimestamp: lastPaymentEvent?.timestamp,
               lastPaymentAmountUsdc: (lastPaymentEvent?.meta as any)?.total_usd ?? s.dashboardStats.lastPaymentAmountUsdc,
+              lastPaymentTxHash: lastTxHash ?? s.dashboardStats.lastPaymentTxHash,
             },
           };
         });
@@ -189,6 +195,7 @@ export function SimulationProvider({ children }: { children: React.ReactNode }) 
           paymentGateStatus: "None",
           lastPaymentTimestamp: undefined,
           lastPaymentAmountUsdc: undefined,
+          lastPaymentTxHash: undefined,
         },
       };
     });
@@ -284,6 +291,7 @@ export function SimulationProvider({ children }: { children: React.ReactNode }) 
           ...s.dashboardStats,
           lastPaymentAmountUsdc: mockPayment,
           lastPaymentTimestamp: Date.now(),
+          lastPaymentTxHash: "0x0000000000000000000000000000000000000000000000000000000000000000",
           expenseVaultBalanceUsdc: +(s.dashboardStats.expenseVaultBalanceUsdc - mockPayment).toFixed(2),
         },
         timeline: addEvent(s.timeline, {

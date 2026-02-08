@@ -2,7 +2,7 @@ import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import crypto from "crypto";
-import { JsonRpcProvider, Interface, getAddress, parseUnits } from "ethers";
+import { JsonRpcProvider, Interface, getAddress, parseUnits, Contract, formatUnits } from "ethers";
 import { spawn } from "child_process";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -31,12 +31,22 @@ const VAULT_ADDRESS = process.env.VAULT_ADDRESS;
 const MERCHANT_ADDRESS = process.env.MERCHANT_ADDRESS;
 const OWNER_ADDRESS = process.env.OWNER_ADDRESS;
 const SPENDER_ADDRESS = process.env.SPENDER_ADDRESS || null;
+const STRATEGY_ADDRESS = process.env.STRATEGY_ADDRESS || null;
 
 if (!VAULT_ADDRESS) throw new Error("Missing VAULT_ADDRESS in .env");
 if (!MERCHANT_ADDRESS) throw new Error("Missing MERCHANT_ADDRESS in .env");
 if (!OWNER_ADDRESS) throw new Error("Missing OWNER_ADDRESS in .env");
 
 const provider = new JsonRpcProvider(BASE_SEPOLIA_RPC_URL);
+
+const ERC20_ABI = [
+  "function balanceOf(address) view returns (uint256)",
+  "function decimals() view returns (uint8)",
+];
+const VAULT_ABI = [
+  "function totalAssets() view returns (uint256)",
+  "function totalSupply() view returns (uint256)",
+];
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -89,6 +99,39 @@ function summarizeInvoices() {
     pending_usd: Number(pendingUsd.toFixed(2)),
     expired_usd: Number(expiredUsd.toFixed(2)),
     last_event_at: timelineEvents[0]?.ts || null,
+  };
+}
+
+async function getVaultUsdcBalance() {
+  const token = new Contract(USDC_CONTRACT, ERC20_ABI, provider);
+  const vault = new Contract(VAULT_ADDRESS, VAULT_ABI, provider);
+
+  const [bal, totalAssets, totalSupply] = await Promise.all([
+    token.balanceOf(VAULT_ADDRESS),
+    vault.totalAssets(),
+    vault.totalSupply(),
+  ]);
+
+  const amountUsdc = Number(formatUnits(bal, USDC_DECIMALS));
+  const totalAssetsUsdc = Number(formatUnits(totalAssets, USDC_DECIMALS));
+  const totalSupplyUsdc = Number(formatUnits(totalSupply, USDC_DECIMALS));
+
+  const yieldUsdc = Math.max(0, totalAssetsUsdc - totalSupplyUsdc);
+  const sharePrice = totalSupplyUsdc > 0 ? totalAssetsUsdc / totalSupplyUsdc : 0;
+  return {
+    vault_address: VAULT_ADDRESS,
+    strategy_address: STRATEGY_ADDRESS,
+    token: TOKEN,
+    token_contract: USDC_CONTRACT,
+    decimals: USDC_DECIMALS,
+    amount_base_units: bal.toString(),
+    amount_usdc: Number(amountUsdc.toFixed(6)),
+    total_assets_base_units: totalAssets.toString(),
+    total_assets_usdc: Number(totalAssetsUsdc.toFixed(6)),
+    total_supply_base_units: totalSupply.toString(),
+    total_supply_usdc: Number(totalSupplyUsdc.toFixed(6)),
+    share_price: Number(sharePrice.toFixed(6)),
+    yield_usdc: Number(yieldUsdc.toFixed(6)),
   };
 }
 
@@ -1219,6 +1262,20 @@ app.get("/ui/timeline", (req, res) => {
 
 app.get("/ui/summary", (req, res) => {
   res.json({ ok: true, summary: summarizeInvoices() });
+});
+
+app.get("/ui/vault", async (req, res) => {
+  try {
+    const balance = await getVaultUsdcBalance();
+    res.json({ ok: true, balance });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: "Vault balance fetch failed", detail: String(e?.message || e) });
+  }
+});
+
+app.post("/ui/timeline/clear", (req, res) => {
+  timelineEvents.length = 0;
+  res.json({ ok: true });
 });
 
 // --------------------

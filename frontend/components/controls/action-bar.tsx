@@ -7,6 +7,7 @@ import { VaultModal } from "@/components/vault/vault-modal";
 import { useMemo, useState } from "react";
 import { createWagmiVaultAdapter } from "@/components/vault/vault-adapter-wagmi";
 import { useAccount } from "wagmi";
+import { useVaultBalance } from "@/components/metrics/use-vault-balance";
 
 export function ActionBar() {
   const { start, reset, state } = useSimulation();
@@ -20,6 +21,10 @@ export function ActionBar() {
   const [fundOpen, setFundOpen] = useState(false);
   const [withdrawOpen, setWithdrawOpen] = useState(false);
 
+  const { data: vaultBalance } = useVaultBalance(isTestnet);
+  const vaultAddress = vaultBalance?.vault_address as `0x${string}` | undefined;
+  const tokenAddress = vaultBalance?.token_contract as `0x${string}` | undefined;
+
   async function handleStartSession() {
     start();
     
@@ -27,6 +32,7 @@ export function ActionBar() {
 
     const serverUrl = process.env.NEXT_PUBLIC_SERVER_URL || "http://localhost:3001";
     try {
+      await fetch(`${serverUrl}/ui/timeline/clear`, { method: "POST" });
       const resp = await fetch(`${serverUrl}/agents/m2m/run`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -42,8 +48,13 @@ export function ActionBar() {
   }
 
   const vaultAdapter = useMemo(() => {
-    return isTestnet ? createWagmiVaultAdapter() : null;
-  }, [isTestnet, address]);
+    if (!isTestnet || !vaultAddress || !tokenAddress) return null;
+    return createWagmiVaultAdapter({
+      ownerAddress: address as `0x${string}` | undefined,
+      vaultAddress,
+      tokenAddress,
+    });
+  }, [isTestnet, address, vaultAddress, tokenAddress]);
 
   return (
     <section className={styles.actionBar}>
@@ -57,10 +68,10 @@ export function ActionBar() {
       </div>
 
       <div className={styles.right}>
-        <Button variant="secondary" disabled={isLocal} onClick={() => setFundOpen(true)}>
+        <Button variant="secondary" disabled={isLocal || !vaultAdapter} onClick={() => setFundOpen(true)}>
           Fund Vault
         </Button>
-        <Button variant="secondary" disabled={isLocal} onClick={() => setWithdrawOpen(true)}>
+        <Button variant="secondary" disabled={isLocal || !vaultAdapter} onClick={() => setWithdrawOpen(true)}>
           Withdraw Vault
         </Button>
       </div>
@@ -70,7 +81,7 @@ export function ActionBar() {
         title="Fund Expense Vault"
         modeLabel="Fund"
         onClose={() => setFundOpen(false)}
-        onConfirm={isTestnet ? vaultAdapter!.fund : undefined}
+        onConfirm={vaultAdapter ? vaultAdapter.fund : undefined}
       />
 
       <VaultModal
@@ -78,7 +89,7 @@ export function ActionBar() {
         title="Withdraw from Expense Vault"
         modeLabel="Withdraw"
         onClose={() => setWithdrawOpen(false)}
-        onConfirm={isTestnet ? vaultAdapter!.withdraw : undefined}
+        onConfirm={vaultAdapter ? vaultAdapter.withdraw : undefined}
       />
     </section>
   );

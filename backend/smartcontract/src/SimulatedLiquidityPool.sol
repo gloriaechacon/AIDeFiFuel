@@ -22,6 +22,8 @@ contract SimulatedLiquidityPool {
 
     event YieldFunded(address indexed from, uint256 amount);
     event InterestAccrued(uint256 elapsed, uint256 interestApplied, uint256 newIndex);
+    event InterestAccruedFromReserve(uint256 interestApplied, uint256 newIndex);
+
     event Deposited(address indexed account, uint256 amount, uint256 sharesMinted);
     event Withdrawn(address indexed account, uint256 amount, uint256 sharesBurned);
 
@@ -41,7 +43,7 @@ contract SimulatedLiquidityPool {
 
     /// @notice Excess underlying sitting in the pool that can be used as "yield reserve".
     /// If someone sends extra USDC to this contract (via fundYield or direct transfer),
-    /// accrueInterest can "materialize" it into the index.
+    /// we can "materialize" it into the index.
     function yieldReserve() public view returns (uint256) {
         uint256 bal = asset.balanceOf(address(this));
         uint256 owed = _totalUnderlying();
@@ -58,7 +60,7 @@ contract SimulatedLiquidityPool {
     }
 
     /// @notice Accrues interest by increasing the index, limited by available yield reserve.
-    /// @dev With real USDC, we cannot mint. So yield must come from pre-funded reserve.
+    /// @dev Time-based accrual (optional for demo). With real USDC, we cannot mint.
     function accrueInterest() public {
         if (totalShares == 0) {
             lastAccrual = block.timestamp;
@@ -75,20 +77,51 @@ contract SimulatedLiquidityPool {
             (underlyingBefore * annualRateBps * elapsed) /
             (BPS * YEAR);
 
-        // Cap by what the pool can actually pay (yield reserve).
+        uint256 applied = _applyReserveInterest(interestWanted);
+
+        lastAccrual = block.timestamp;
+        emit InterestAccrued(elapsed, applied, index);
+    }
+
+    /// @notice DEMO MODE: instantly apply yield by consuming reserve.
+    /// @dev This does NOT mint. It only converts already-funded reserve into a higher index.
+    /// @param desiredInterest Amount of underlying (USDC base units) you want to apply as yield.
+    /// It will be capped by available reserve.
+    function accrueFromReserve(uint256 desiredInterest) external {
+        require(desiredInterest > 0, "amount=0");
+        require(totalShares > 0, "no shares");
+
+        uint256 applied = _applyReserveInterest(desiredInterest);
+        emit InterestAccruedFromReserve(applied, index);
+    }
+
+    /// @notice DEMO MODE: apply ALL reserve at once.
+    function accrueAllReserve() external {
+        require(totalShares > 0, "no shares");
         uint256 reserve = yieldReserve();
-        uint256 interestApplied = interestWanted;
+        require(reserve > 0, "no reserve");
+
+        uint256 applied = _applyReserveInterest(reserve);
+        emit InterestAccruedFromReserve(applied, index);
+    }
+
+    /// @dev Applies up to `interestWanted` from reserve and updates index.
+    function _applyReserveInterest(uint256 interestWanted) internal returns (uint256 interestApplied) {
+        if (interestWanted == 0) return 0;
+
+        uint256 reserve = yieldReserve();
+        if (reserve == 0) return 0;
+
+        interestApplied = interestWanted;
         if (interestApplied > reserve) {
             interestApplied = reserve;
         }
 
-        if (interestApplied > 0) {
-            uint256 underlyingAfter = underlyingBefore + interestApplied;
-            index = (underlyingAfter * WAD) / totalShares;
-        }
+        // Update index: (underlyingBefore + applied) / totalShares
+        uint256 underlyingBefore = _totalUnderlying();
+        uint256 underlyingAfter = underlyingBefore + interestApplied;
 
-        lastAccrual = block.timestamp;
-        emit InterestAccrued(elapsed, interestApplied, index);
+        index = (underlyingAfter * WAD) / totalShares;
     }
 
     /// @notice Underlying balance for an account (based on shares and index).
@@ -98,7 +131,9 @@ contract SimulatedLiquidityPool {
 
     function deposit(uint256 amount) external {
         require(amount > 0, "amount=0");
-        accrueInterest();
+        // Optional: accrueInterest(); (kept off by default for deterministic demos)
+        // If you want time-based accrual, uncomment:
+        // accrueInterest();
 
         require(asset.transferFrom(msg.sender, address(this), amount), "transferFrom failed");
 
@@ -113,7 +148,8 @@ contract SimulatedLiquidityPool {
 
     function withdraw(uint256 amount) external {
         require(amount > 0, "amount=0");
-        accrueInterest();
+        // Optional: accrueInterest(); (same reasoning as deposit)
+        // accrueInterest();
 
         uint256 sharesToBurn = (amount * WAD) / index;
         if ((sharesToBurn * index) / WAD < amount) sharesToBurn += 1;
@@ -127,4 +163,3 @@ contract SimulatedLiquidityPool {
         emit Withdrawn(msg.sender, amount, sharesToBurn);
     }
 }
-
